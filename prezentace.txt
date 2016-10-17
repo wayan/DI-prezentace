@@ -1,0 +1,83 @@
+Top level scope
+
+Různé služby v různých prostředích
+
+Adresovatelnost služeb, konkrétní instance
+
+- Typova kontrola sluzeb (typová kontrola v závislostech)
+- logování resolvingu
+- Konfigurace
+
+- vyhody delegace
+- Processor/Engine engine zadratovany do procesoru=>dedicnost
+
+
+	- Instance misto trid, pouzit priklad s LinkMakerem
+
+- config atribute je code smell
+
+- najit jak se jmenuje top level context
+- bez stavové a statické objekty (DBIx::Class::
+
+Napsat SYNOPSI
+
+Class::Data
+
+__PACKAGE__->config
+
+role/tridy/dedicnost/parametrizovatelne role
+
+
+
+package MojeChytraTrida;
+use Moose;
+
+has config => ( is => 'ro', lazy => 1, builder => '_build_config' );
+
+has nejaka_hodnota => (
+    is      => 'ro',
+    lazy    => 1,
+    default => sub {
+        my $this = shift;
+        return $this->config->{nejaka_hodnota};
+    }
+);
+
+sub _build_config {
+    my $this = shift;
+    my $file = najdi_konfiguraci_podle_tridy($this);
+    return natahni_konfiguraci($file);
+}
+
+sub BUILD {
+    my $this = $shift;
+
+    # lazy, ale ne tak moc
+    $this->nejaka_hodnota;
+}
+
+package Durian::Rate::Processor;
+
+....
+sub rate_all {
+	...
+	while( my $cdr = $this->fetch_cdr ){
+		$this->rate_cdr($cdr);
+	}
+}
+
+
+sub create_engine {
+}
+
+sub connect_to_db {
+}
+
+package Durian::Rate::Processor;
+use Moose;
+
+has engine => (is => 'ro', required => 1);
+
+has storage => (is => 'ro', required => 1);
+
+-
