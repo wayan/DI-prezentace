@@ -44,19 +44,36 @@
         <pre><code>
         # Durian-Rate.pl
         ...
-        my $processor = Durian::Rate::Processor->new(;
+        my $processor = Durian::Rate::Processor->new();
         $processor->rate_calls();
 
         # Durian/Rate/Processor.pm
         package Durian::Rate::Processor;
-
+        ...
         sub rate_calls {
-            my $storage = ...
-            my $call_it = $this->get_calls();
-            while( my $call = $call_it->()){
-                $this-
-            }
+            my $storage = ... my $cdr_it = $this->get_cdrs();
+
+            my $store_rated = $this->build_store_cdr();
+
+            my $storage = DBIx::Class::Storage::DBI->new;
+            $storage->connect_info(
+                [ $dsn, $username, $auth, $attr, $onconnect ] );
+
+            my $engine = Durian::Rate::Engine->new(
+                dbh => $storage->dbh,
+                ...
+            );
+
+            $storage->txn_do(
+                sub {
+                    while ( my $cdr = $call_it->() ) {
+                        my $rated = $this->rate_cdr($cdr);
+                        $store_rated->( $cdr, $rate );
+                    }
+                }
+            );
         }
+        ...
         
         </code></pre>
     </section>
@@ -66,7 +83,8 @@
         # Durian-Rate.pl
 
         ...
-        my $storage = DBIx::Class::Storage::DBI->connect('dsn:...', ...);
+        my $storage = DBIx::Class::Storage::DBI->new;
+        $storage->('dsn:...', ...);
         my $engine  = Durian::Rate::Engine->new(
             dbh => $storage->dbh
         );
@@ -91,16 +109,16 @@
     </section>
 
     <section class="slide">
-        <h2>Komponenty aplikace</h2>
+        <h2>Typy komponenty (nejen objekty)</h2>
 
         <ul>
             <li>Objekty (instance)</li>
             <li>Hodnoty (např. z konfigurace)</li>
-            <li>Uzávěry (PSGI, middleware nejen Plack,
-                jednoduché objekty, např. CLI
-            )</li>
+            <li>Uzávěry (PSGI, middleware nejen Plack, jednoduché objekty)</li>
             <li>Konstruované třídy (např. aplikace Catalyst)</li>
         </ul>
+
+        <!--
 
         Místo konstrukce - skripty, PSGI, top level 
 
@@ -112,12 +130,12 @@
 
         Idea:
 
-
         Připojení k db
         Připojení k externím systémům (REST, SOAP, ...)
-        PSGI aplikace, middlewaree, ...
+        PSGI aplikace, middleware, ...
         Konfigurace, ...
         Webové aplikace 
+        -->
     </section>
 
     <section class="slide">
@@ -135,6 +153,9 @@
 my $adresar = Durian::IOC->root;
 my $processor = $adresar->resolve(service => 'Rate/processor');</code></pre>
         </li>
+        <li>Je Durian::IOC->root singleton?
+            <pre><code>refaddr(Durian::IOC->root) == refaddr(Durian::IOC->root)? 'YES': 'NO'</code></pre>
+        </li>
         <li>Nebo jako funkci, vracející komponentu pro zadané jméno
             <pre><code>use Durian::IOC qw(resolve);
 my $processor = resolve('Rate/processor');</code></pre>
@@ -150,6 +171,436 @@ my $processor = resolve('Rate/processor');</code></pre>
     a provede s nimi nějakou činnost -->
 
     </section>
+
+<!-- DURIAN -->
+    <section class="slide">
+        <h2>Příklady služeb</h2>
+
+        <pre>Commission/control
+Commission/control_cli
+config
+daemons
+Database/attr
+Database/check_oracle_weekday
+Database/connect_info
+Database/db_encoding
+Database/dbh
+Database/dsn
+Database/enhanced_storage
+Database/env
+Database/LongReadLen
+Database/NLS_DATE_FORMAT
+Database/NLS_LANG
+Database/NLS_NUMERIC_CHARACTERS
+Database/on_connect_do
+Database/password
+Database/RootClass
+Database/schema
+Database/storage
+Database/username
+Datis/closure_transport
+Datis/controller
+Datis/filenet_client
+Datis/invoice_transport
+Datis/storage
+Datis/stored_files
+Datis/Transport/cert_path
+Datis/Transport/_closure_transport
+Datis/Transport/host
+Datis/Transport/_invoice_transport
+Datis/Transport/remote_closure_dir
+Datis/Transport/remote_invoice_dir
+Datis/Transport/username
+ErpBatch/ist_sap_client
+ErpBatch/sap_dat
+ErpBatch/sap_dat_transport
+ErpBatch/SAP_DAT_Transport/cert_path
+ErpBatch/SAP_DAT_Transport/host
+ErpBatch/SAP_DAT_Transport/remote_dir
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 2.</h2>
+
+        <pre>ErpBatch/SAP_DAT_Transport/remote_dir
+ErpBatch/SAP_DAT_Transport/sap_dat_transport
+ErpBatch/SAP_DAT_Transport/username
+ErpBatch/sap_min
+Filenet/credentials_header_transport_hook_mw
+Filenet/endpoint
+Filenet/filenet_client
+Filenet/logging_transport_hook_mw
+Filenet/lwp_user_agent
+Filenet/lwp_user_agent_ssl_opts
+Filenet/password
+Filenet/plain_transport_hook
+Filenet/schema_files
+Filenet/soap_raw_logfile
+Filenet/soap_raw_logger
+Filenet/storage
+Filenet/transport_hook
+Filenet/username
+Filenet/uuid_creator
+Filenet/wsdl_file
+Filenet/xml_compile_client
+Install/postinstall
+Integration/Anoa/auth
+Integration/Anoa/soap_client
+Integration/Anoa/username
+Integration/Anoa/wsdl_url
+Integration/cli
+Integration/logdir
+Integration/manager
+Integration/storage
+Invoice/Durian::Invoice::Print::PrintNeT
+Invoice/Durian::Invoice::Saldo
+Invoice/Durian::Invoice::SaldoPayment
+Invoice/fetch_queues
+Invoice/fetch_queues_processed
+Invoice/invoice_factory_for
+Invoice/PrintNeT/billprint_from_durian
+Invoice/PrintNeT/billprint_from_durian_batch
+Invoice/PrintNeT/billprint_password
+Invoice/PrintNeT/billprint_ready_to_print
+Invoice/PrintNeT/billprint_to_durian
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 3.</h2>
+
+        <pre>Invoice/PrintNeT/billprint_to_durian
+Invoice/PrintNeT/billprint_to_durian_local
+Invoice/PrintNeT/billprint_user
+Invoice/PrintNeT/billprint_workgroup
+Invoice/PrintNeT/samba_builder
+InvoiceTask/aq_manager
+InvoiceTask/aq_manager_cli
+InvoiceTask/check_invoice_printed
+InvoiceTask/datis_controller
+InvoiceTask/invoice_task_actions
+InvoiceTask/invoice_task_processor
+InvoiceTask/message_class
+InvoiceTask/print_closure_by_datis
+InvoiceTask/print_invoice_by_datis
+InvoiceTask/process_erpbatch_sap_dat
+InvoiceTask/process_erpbatch_sap_min
+InvoiceTask/process_invoice_saldo
+NCloud/cleaners
+NCloud/clear_error_days
+NCloud/flush_after
+NCloud/HW/clean
+NCloud/HW/clear_errors
+NCloud/HW/engine
+NCloud/HW/_engine
+NCloud/HW/processor
+NCloud/HW/rate
+NCloud/HW/rewind_period
+NCloud/hw_tariff_resource_lookup
+NCloud/hw_tariff_version_lookup
+NCloud/license_engine
+NCloud/LicenseHourly/clean
+NCloud/LicenseHourly/clear_errors
+NCloud/LicenseHourly/engine
+NCloud/LicenseHourly/processor
+NCloud/LicenseHourly/rate
+NCloud/LicenseHourly/rewind_period
+NCloud/LicenseMonthly/clean
+NCloud/LicenseMonthly/clear_errors
+NCloud/LicenseMonthly/engine
+NCloud/LicenseMonthly/processor
+NCloud/LicenseMonthly/rate
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 4.</h2>
+
+        <pre>NCloud/LicenseMonthly/rate
+NCloud/LicenseMonthly/rewind_period
+NCloud/lic_tariff_license_lookup
+NCloud/lic_tariff_version_lookup
+NCloud/log
+NCloud/log_dir
+NCloud/log_file
+NCloud/master_log
+NCloud/ncloud_tariffs
+NCloud/pid_file
+NCloud/processors
+NCloud/progress_log
+NCloud/rate_cli
+NCloud/rate_schema
+NCloud/service_id_lookup
+NCloud/storage
+Rate/Cleaner/mobile_num
+Rate/Cleaner/phone_line
+Rate/cleaners
+Rate/cli
+Rate/Engine/BO
+Rate/Engine/CA
+Rate/Engine/CL
+Rate/Engine/GO
+Rate/Engine/lookup_cache
+Rate/Engine/MDT
+Rate/Engine/MDTR
+Rate/Engine/MOC
+Rate/Engine/MOCR
+Rate/Engine/MOM
+Rate/Engine/MOMR
+Rate/Engine/MOS
+Rate/Engine/MOSR
+Rate/Engine/MTC
+Rate/Engine/MTCR
+Rate/Engine/MTM
+Rate/Engine/MTMR
+Rate/Engine/MTS
+Rate/Engine/MTSR
+Rate/Engine/PL
+Rate/Engine/PMOC
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 5.</h2>
+
+        <pre>Rate/Engine/PMOC
+Rate/Engine/PMOS
+Rate/Engine/PMTS
+Rate/Engine/PO
+Rate/Engine/POC
+Rate/Engine/POS
+Rate/Engine/profitlink_tariff_name
+Rate/Engine/PT
+Rate/Engine/PTS
+Rate/Engine/PW
+Rate/Engine/rainbow_rating_engine
+Rate/Engine/redir_rate_engine
+Rate/Engine/RL
+Rate/Engine/storage_supp
+Rate/Engine/vpn_fix2mobile_direction_name
+Rate/log
+Rate/log_dir
+Rate/log_file
+Rate/master_log
+Rate/pid_file
+Rate/PL_SQL/pkg_cdr_in_bb
+Rate/PL_SQL/pkg_cdr_out_bb
+Rate/PL_SQL/pkg_dsl_raw_traffic_bb
+Rate/price_precision
+Rate/Processor/clear_errors_days
+Rate/Processor/engine_for_incoming
+Rate/Processor/engine_for_mobile_data
+Rate/Processor/engine_for_mobile_voice_sms
+Rate/Processor/engine_for_outgoing
+Rate/Processor/flush_after
+Rate/Processor/ignored_call_types
+Rate/Processor/incoming
+Rate/Processor/mobile_data
+Rate/Processor/mobile_voice_sms
+Rate/Processor/outgoing
+Rate/processors
+Rate/schema
+Rate/storage
+Salwin/Database/attr
+Salwin/Database/connect_info
+Salwin/Database/dbh
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 6.</h2>
+
+        <pre>Salwin/Database/dbh
+Salwin/Database/dsn
+Salwin/Database/env
+Salwin/Database/on_connect_do
+Salwin/Database/password
+Salwin/Database/storage
+Salwin/Database/username
+SAP/GTSCZ/auth
+SAP/GTSCZ/endpoint
+SAP/GTSCZ/logfile
+SAP/GTSCZ/sap_client
+SAP/GTSCZ/transport_hook
+SAP/GTSCZ/ucetni_okruh
+SAP/GTSCZ/username
+SAP/GTSCZ/wsdl_file
+SAP/GTSCZ/xml_compile_client
+SAP/IST/auth
+SAP/IST/endpoint
+SAP/IST/ist_sap_client
+SAP/IST/logfile
+SAP/IST/transport_hook
+SAP/IST/username
+SAP/IST/wsdl_file
+SAP/IST/xml_compile_client
+SAP/IST/ZZIST_IF_MINVA_ADJUST2_reader
+SAP/TMCZ/auth
+SAP/TMCZ/endpoint
+SAP/TMCZ/logfile
+SAP/TMCZ/sap_client
+SAP/TMCZ/transport_hook
+SAP/TMCZ/ucetni_okruh
+SAP/TMCZ/username
+SAP/TMCZ/wsdl_file
+SAP/TMCZ/xml_compile_client
+services_manager
+Site/daemons
+site_name
+Site/site_name
+Supp/Database/attr
+Supp/Database/check_oracle_weekday
+Supp/Database/connect_info
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 7.</h2>
+
+        <pre>Supp/Database/connect_info
+Supp/Database/dbh
+Supp/Database/dsn
+Supp/Database/env
+Supp/Database/LongReadLen
+Supp/Database/NLS_DATE_FORMAT
+Supp/Database/NLS_LANG
+Supp/Database/NLS_NUMERIC_CHARACTERS
+Supp/Database/on_connect_do
+Supp/Database/password
+Supp/Database/RootClass
+Supp/Database/storage
+Supp/Database/username
+Tariff/banding_model_exporter
+Tariff/banding_model_importer
+Tariff/eraser
+Tariff/export_banding_model
+Tariff/export_tariff
+Tariff/import_banding_model
+Tariff/Importer/banding_model
+Tariff/Importer/BandingModel/dispatcher
+Tariff/Importer/BandingModel/Factory/Fixní odchozí hlas
+Tariff/Importer/BandingModel/Factory/Fixní pøíchozí hlas
+Tariff/Importer/BandingModel/Factory/Hlasové premium slu¾by - poskytování
+Tariff/Importer/BandingModel/Factory/Hlasové premium slu¾by - pou¾ívání
+Tariff/Importer/BandingModel/Factory/mobile_data
+Tariff/Importer/BandingModel/Factory/mobile_data_roaming
+Tariff/Importer/BandingModel/Factory/mobile_voice_sms_mms
+Tariff/Importer/BandingModel/Factory/mobile_voice_sms_mms_roaming
+Tariff/Importer/BandingModel/Factory/Mobilní data v domovské síti
+Tariff/Importer/BandingModel/Factory/Mobilní data v roamingové síti
+Tariff/Importer/BandingModel/Factory/Mobilní hlas, SMS, MMS v domovské síti
+Tariff/Importer/BandingModel/Factory/Mobilní hlas, SMS, MMS v roamingové síti
+Tariff/Importer/BandingModel/Factory/SMS Gate slu¾by
+Tariff/Importer/BandingModel/Factory/SMS premium slu¾by - poskytování
+Tariff/Importer/BandingModel/Factory/SMS premium slu¾by - pou¾ívání
+Tariff/Importer/BandingModel/importer_factory
+Tariff/Importer/BandingModel/storage
+Tariff/Importer/storage
+Tariff/Importer/tariff
+Tariff/import_tariff
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 8.</h2>
+
+        <pre>Tariff/import_tariff
+Tariff/storage
+Tariff/tariff_exporter
+Tariff/tariff_importer
+Umum/REST/App
+Umum/REST/attrsets
+Umum/REST/authenticator
+Umum/REST/basic_auth_middleware
+Umum/REST/billingaccounts
+Umum/REST/bundles
+Umum/REST/components
+Umum/REST/customers
+Umum/REST/Database/attr
+Umum/REST/Database/connect_info
+Umum/REST/Database/dbh
+Umum/REST/Database/dsn
+Umum/REST/Database/env
+Umum/REST/Database/on_connect_do
+Umum/REST/Database/password
+Umum/REST/Database/storage
+Umum/REST/Database/username
+Umum/REST/exception_factory
+Umum/REST/item_types
+Umum/REST/Middleware
+Umum/REST/mobile_nums
+Umum/REST/pricingitems
+Umum/REST/product_bundles
+Umum/REST/product_components
+Umum/REST/Router
+Umum/REST/RouterConfig
+Umum/REST/storage
+Umum/REST/users
+Umum/REST/xml_schemas
+Umum/schema
+Umum/stored_files
+Umum/uri_builder
+Umum/URIBuilder/base
+Umum/URIBuilder/uri_builder
+WebCare/Database/attr
+WebCare/Database/connect_info
+WebCare/Database/dbh
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 9.</h2>
+
+        <pre>WebCare/Database/dbh
+WebCare/Database/dsn
+WebCare/Database/env
+WebCare/Database/LongReadLen
+WebCare/Database/NLS_DATE_FORMAT
+WebCare/Database/NLS_LANG
+WebCare/Database/NLS_NUMERIC_CHARACTERS
+WebCare/Database/on_connect_do
+WebCare/Database/password
+WebCare/Database/RootClass
+WebCare/Database/storage
+WebCare/Database/username
+WebServices/AkarSOAPManager/basic_auth
+WebServices/AkarSOAPManager/basic_auth_middleware
+WebServices/AkarSOAPManager/dispatch_to
+WebServices/AkarSOAPManager/dispatch_with
+WebServices/AkarSOAPManager/htusers_authenticator
+WebServices/AkarSOAPManager/htusers_file
+WebServices/AkarSOAPManager/load_modules
+WebServices/AkarSOAPManager/psgi_app
+WebServices/AkarSOAPManager/raw_logging
+WebServices/AkarSOAPManager/raw_logging_file
+WebServices/AkarSOAPManager/raw_logging_middleware
+WebServices/AkarSOAPManager/raw_soap_psgi_app
+WebServices/AkarSOAPManager/runner
+WebServices/AkarSOAPManager/soap_middleware
+WebServices/AkarSOAPManager/soap_psgi_app
+WebServices/AkarSOAPManager/soap_transport
+WebServices/AkarSOAPManager/wsdl_middleware
+WebServices/AkarSOAPManager/wsdl_psgi_app
+WebServices/htusers_pwd
+WebServices/name
+WebServices/old_soap_middleware
+WebServices/old_wsdl_middleware
+WebServices/psgi_app
+WebServices/raw_logging_file
+WebServices/runner
+WebServices/Runner/_
+WebServices/Runner/name
+WebServices/Runner/port
+WebServices/Runner/psgi_app
+</pre>
+    </section>
+    <section class="slide">
+        <h2>Příklady služeb díl 10.</h2>
+
+        <pre>WebServices/Runner/psgi_app
+WebServices/soap_authenticator
+WebServices/soap_raw_logging
+WebServices/umum
+WebServices/umum_rest_psgi
+WebServices/umum_soap
+WebServices/umum_stored_files
+WebServices/umum_wsdl
+</pre>
+    </section>
+<!-- /DURIAN -->
 
     <section class="slide">
     <h2>Adresář komponent - příklad použití</h2>
@@ -172,8 +623,6 @@ my $processor = resolve('Rate/processor');</code></pre>
     $rate_processor->rate_calls();
     </code></pre>
     </section>
-
-    
 
 
     <section class="slide">
