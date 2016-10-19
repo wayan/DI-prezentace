@@ -41,58 +41,81 @@
     <section class="slide">
         <h2>Příklad - oceňování hovorů</h2>
 
-        <pre><code>
-        # Durian-Rate.pl
+        <pre><code># Durian-Rate.pl
+...
+my $processor = Durian::Rate::Processor->new();
+$processor->rate_calls();</code></pre>
+
+<pre><code>package Durian::Rate::Processor;
+...
+sub rate_calls {
+    my $this = shift;
+     my $cdr_it = $this->get_cdrs();
+
+     my $store_rated = $this->build_store_cdr();
+
+     my $storage = DBIx::Class::Storage::DBI->new;
+     $storage->connect_info(
+        [ $dsn, $username, $auth, $attr, $onconnect ] );
+
+    my $engine = Durian::Rate::Engine->new(
+        dbh => $storage->dbh,
         ...
-        my $processor = Durian::Rate::Processor->new();
-        $processor->rate_calls();
+    );
 
-        # Durian/Rate/Processor.pm
-        package Durian::Rate::Processor;
-        ...
-        sub rate_calls {
-            my $storage = ... my $cdr_it = $this->get_cdrs();
-
-            my $store_rated = $this->build_store_cdr();
-
-            my $storage = DBIx::Class::Storage::DBI->new;
-            $storage->connect_info(
-                [ $dsn, $username, $auth, $attr, $onconnect ] );
-
-            my $engine = Durian::Rate::Engine->new(
-                dbh => $storage->dbh,
-                ...
-            );
-
-            $storage->txn_do(
-                sub {
-                    while ( my $cdr = $call_it->() ) {
-                        my $rated = $this->rate_cdr($cdr);
-                        $store_rated->( $cdr, $rate );
-                    }
-                }
-            );
+    $storage->txn_do(
+        sub {
+            while ( my $cdr = $call_it->() ) {
+                my $rated = $engine->rate($cdr);
+                $store_rated->( $cdr, $rate );
+            }
         }
-        ...
+    );
+}
+...
         
         </code></pre>
     </section>
 
     <section class="slide">
-        <pre><code>
-        # Durian-Rate.pl
+        <h2>Příklad - oceňování hovorů, jinak</h2>
 
-        ...
-        my $storage = DBIx::Class::Storage::DBI->new;
-        $storage->('dsn:...', ...);
-        my $engine  = Durian::Rate::Engine->new(
-            dbh => $storage->dbh
-        );
-        my $processor = Durian::Rate::Processor->new(
-            engine => $engine,
-            storage => $storage,
-        );
-        $processor->rate_calls();
+        <pre><code>package Durian::Rate::Processor;
+use Moose;
+
+use Types::Standard qw(HasMethods);
+
+has storage => (is => 'ro', required => 1, isa => HasMethods['dbh', 'txn_do']);
+has engine => (is => 'ro',  required => 1, isa => HasMethods['rate']);
+...
+sub rate_calls {
+    my $this   = shift;
+    my $cdr_it = $this->get_cdrs();
+
+    my $store_rated = $this->build_store_cdr();
+    my $engine = $this->engine;
+    $this->storage->txn_do(
+        sub {
+            while ( my $cdr = $call_it->() ) {
+                my $rated = $engine->rate($cdr);
+                $store_rated->( $cdr, $rate );
+            }
+        }
+    );
+}</code></pre>
+    
+        <pre><code># Durian-Rate.pl
+# wiring
+my $storage = DBIx::Class::Storage::DBI->new;
+$storage->connect_info(['dsn:...', $username, $password, $attr]);
+my $engine  = Durian::Rate::Engine->new(
+    dbh => $storage->dbh
+);
+my $processor = Durian::Rate::Processor->new(
+    engine  => $engine,
+    storage => $storage,
+);
+$processor->rate_calls();
         </code></pre>
     </section>
 
@@ -109,7 +132,7 @@
     </section>
 
     <section class="slide">
-        <h2>Typy komponenty (nejen objekty)</h2>
+        <h2>Typy komponent (nejen objekty)</h2>
 
         <ul>
             <li>Objekty (instance)</li>
@@ -140,7 +163,7 @@
 
     <section class="slide">
         
-    <h2>Adresář komponent</h2>
+    <h2>Adresář komponent (IOC root)</h2>
 
     <ul>
         <li>Všechny komponenty mají jména (hierarchická)</li>
@@ -149,18 +172,20 @@
         <li>Implementace - generátory (služby)</li>
         <li>Struktura (jména) a granularita závisí na autorech</li>
         <li>Adresář zpřístupníme jako objekt
-            <pre><code>use Durian::IOC;
-my $adresar = Durian::IOC->root;
-my $processor = $adresar->resolve(service => 'Rate/processor');</code></pre>
-        </li>
-        <li>Je Durian::IOC->root singleton?
-            <pre><code>refaddr(Durian::IOC->root) == refaddr(Durian::IOC->root)? 'YES': 'NO'</code></pre>
+            <pre><code>use Durian::IOC qw(ioc_root);
+my $adresar = ioc_root();
+my $processor = $adresar->resolve(service => 'Rate/processor');
+# nebo
+my $processor = $adresar->fetch('Rate/processor')->get;
+</code></pre>
         </li>
         <li>Nebo jako funkci, vracející komponentu pro zadané jméno
             <pre><code>use Durian::IOC qw(resolve);
 my $processor = resolve('Rate/processor');</code></pre>
 </li>
-</li>
+        <li>Je ioc_root() singleton?
+            <pre><code>refaddr(ioc_root()) == refaddr(ioc_root())? 'YES': 'NO'</code></pre>
+        </li>
     </ul>
     <!-- Dáme všem komponentám v aplikaci jména a centrálně mezi nimi definujeme závislosti.
     Adresář komponent zpřístupníme jako funkci (metodu) apod.
@@ -171,6 +196,132 @@ my $processor = resolve('Rate/processor');</code></pre>
     a provede s nimi nějakou činnost -->
 
     </section>
+
+    <section class="slide">
+        <h2>Bread::Board - DI framework</h2>
+
+        <ul>
+            <li>Služby (resolvery) - generátory komponent aplikace (coderef)</li>
+            <li>Služby mají závislosti na jiných službách</li>
+            <li>Služby mohou mít lifecycle - (singleton)</li>
+            <li>Kontejnery - sdružují služby</li>
+        </ul>
+    </section>
+
+    <section class="slide">
+    <h2>Organizace kontejnerů</h2>
+
+    <ul>
+        <li>Líné natahování kontejnerů v samostatných souborech</li>
+        <li>Bread::Board + Bread::Board::LazyLoader + (Bread::Board::Svc)</li>
+    </ul>
+
+<pre>
+./Redis.ioc
+./Model.ioc
+./WSLink
+./WSLink/TMCZ
+./WSLink/TMCZ/ESME.ioc
+./WSLink/TMCZ/CNHNotification.ioc
+./LicenseReport.ioc
+./Download.ioc
+./REST
+./Root.ioc
+./VMWare.ioc
+./I18N.ioc
+./REST.ioc
+./BackupBasic.ioc
+./BillingReport.ioc
+./OpenStack.ioc
+./Task.ioc
+./Workflows.ioc
+./Config.ioc
+./Database.ioc
+./App.ioc
+./PayModel.ioc
+./WSLink.ioc
+</pre>
+
+    </section>
+
+    <section class="slide">
+<pre><code>package Durian::IOC;
+use common::sense;
+
+# ABSTRACT: the root of IOC tree
+
+use Bread::Board::LazyLoader qw(load_container);
+use Types::Standard qw(is_ArrayRef Str ArrayRef);
+use Type::Params;
+
+use Exporter 'import';
+our @EXPORT_OK = qw(resolve ioc_root);
+
+# search files in same directory
+sub ioc_root {
+    my ($root_dir) = __FILE__ =~ /(.*)\.pm/;
+
+    return load_container(
+        root_dir           => $root_dir,
+        filename_extension => 'ioc'
+    );
+}
+
+# resolves possibly more than one path at once
+sub resolve {
+    state $params = Type::Params::compile( Str | ArrayRef[ Str ] );
+
+    my ( $path_arg ) = $params->(@_);
+
+    my $root = ioc_root();
+    my @resolved = map { $root->fetch($_)->get; } is_ArrayRef($path_arg) ? @$path_arg : $path_arg;
+    return wantarray? @resolved: $resolved[0];
+}
+
+1;
+
+# vim: expandtab:shiftwidth=4:tabstop=4:softtabstop=0:textwidth=78:
+</code></pre>
+    </section>
+
+    <section class="slide">
+    <h2>Organizace kontejnerů</h2>
+<pre>
+# ./Redis.ioc
+use common::sense;
+
+# ABSTRACT: Redis just for REST
+
+use Durian::BreadBoard;
+use Carp qw(croak confess);
+
+sub {
+    my $name = shift;
+
+    return container $name => as {
+        alias config => '../Config/config';
+
+        config_service 'server', config_key => 'Redis.server';
+
+# The reconnect option enables auto-reconnection mode.
+# If we cannot connect to the Redis server, or if a network write fails, we enter retry mode.
+# We will try a new connection every every microseconds (1 ms by default), up-to reconnect seconds.
+
+        config_service 'reconnect',
+            config_key => 'Redis.reconnect',
+            default    => 5;
+        config_service 'every', config_key => 'Redis.every', default => 300;
+
+        # svc server => 'redis:6379';
+        svc_singleton 'redis', 'Redis', [ 'server', 'reconnect', 'every' ];
+    };
+};
+
+# vim: expandtab:shiftwidth=4:tabstop=4:softtabstop=0:textwidth=96:syntax=perl
+</pre>
+
+    </section>
+
 
 <!-- DURIAN -->
     <section class="slide">
@@ -210,21 +361,12 @@ Datis/Transport/host
 Datis/Transport/_invoice_transport
 Datis/Transport/remote_closure_dir
 Datis/Transport/remote_invoice_dir
-Datis/Transport/username
-ErpBatch/ist_sap_client
-ErpBatch/sap_dat
-ErpBatch/sap_dat_transport
-ErpBatch/SAP_DAT_Transport/cert_path
-ErpBatch/SAP_DAT_Transport/host
-ErpBatch/SAP_DAT_Transport/remote_dir
 </pre>
     </section>
     <section class="slide">
         <h2>Příklady služeb díl 2.</h2>
 
-        <pre>ErpBatch/SAP_DAT_Transport/remote_dir
-ErpBatch/SAP_DAT_Transport/sap_dat_transport
-ErpBatch/SAP_DAT_Transport/username
+        <pre>ErpBatch/SAP_DAT_Transport/username
 ErpBatch/sap_min
 Filenet/credentials_header_transport_hook_mw
 Filenet/endpoint
@@ -263,28 +405,16 @@ Invoice/PrintNeT/billprint_from_durian_batch
 Invoice/PrintNeT/billprint_password
 Invoice/PrintNeT/billprint_ready_to_print
 Invoice/PrintNeT/billprint_to_durian
+Invoice/PrintNeT/billprint_to_durian_local
+Invoice/PrintNeT/billprint_user
+Invoice/PrintNeT/billprint_workgroup
+Invoice/PrintNeT/samba_builder
 </pre>
     </section>
     <section class="slide">
         <h2>Příklady služeb díl 3.</h2>
 
-        <pre>Invoice/PrintNeT/billprint_to_durian
-Invoice/PrintNeT/billprint_to_durian_local
-Invoice/PrintNeT/billprint_user
-Invoice/PrintNeT/billprint_workgroup
-Invoice/PrintNeT/samba_builder
-InvoiceTask/aq_manager
-InvoiceTask/aq_manager_cli
-InvoiceTask/check_invoice_printed
-InvoiceTask/datis_controller
-InvoiceTask/invoice_task_actions
-InvoiceTask/invoice_task_processor
-InvoiceTask/message_class
-InvoiceTask/print_closure_by_datis
-InvoiceTask/print_invoice_by_datis
-InvoiceTask/process_erpbatch_sap_dat
-InvoiceTask/process_erpbatch_sap_min
-InvoiceTask/process_invoice_saldo
+        <pre>InvoiceTask/process_invoice_saldo
 NCloud/cleaners
 NCloud/clear_error_days
 NCloud/flush_after
@@ -309,12 +439,6 @@ NCloud/LicenseMonthly/clear_errors
 NCloud/LicenseMonthly/engine
 NCloud/LicenseMonthly/processor
 NCloud/LicenseMonthly/rate
-</pre>
-    </section>
-    <section class="slide">
-        <h2>Příklady služeb díl 4.</h2>
-
-        <pre>NCloud/LicenseMonthly/rate
 NCloud/LicenseMonthly/rewind_period
 NCloud/lic_tariff_license_lookup
 NCloud/lic_tariff_version_lookup
@@ -345,28 +469,12 @@ Rate/Engine/MOC
 Rate/Engine/MOCR
 Rate/Engine/MOM
 Rate/Engine/MOMR
-Rate/Engine/MOS
-Rate/Engine/MOSR
-Rate/Engine/MTC
-Rate/Engine/MTCR
-Rate/Engine/MTM
-Rate/Engine/MTMR
-Rate/Engine/MTS
-Rate/Engine/MTSR
-Rate/Engine/PL
-Rate/Engine/PMOC
 </pre>
     </section>
     <section class="slide">
-        <h2>Příklady služeb díl 5.</h2>
+        <h2>Příklady služeb díl 4.</h2>
 
-        <pre>Rate/Engine/PMOC
-Rate/Engine/PMOS
-Rate/Engine/PMTS
-Rate/Engine/PO
-Rate/Engine/POC
-Rate/Engine/POS
-Rate/Engine/profitlink_tariff_name
+        <pre>Rate/Engine/profitlink_tariff_name
 Rate/Engine/PT
 Rate/Engine/PTS
 Rate/Engine/PW
@@ -401,12 +509,6 @@ Rate/storage
 Salwin/Database/attr
 Salwin/Database/connect_info
 Salwin/Database/dbh
-</pre>
-    </section>
-    <section class="slide">
-        <h2>Příklady služeb díl 6.</h2>
-
-        <pre>Salwin/Database/dbh
 Salwin/Database/dsn
 Salwin/Database/env
 Salwin/Database/on_connect_do
@@ -443,33 +545,12 @@ SAP/TMCZ/xml_compile_client
 services_manager
 Site/daemons
 site_name
-Site/site_name
-Supp/Database/attr
-Supp/Database/check_oracle_weekday
-Supp/Database/connect_info
 </pre>
     </section>
     <section class="slide">
-        <h2>Příklady služeb díl 7.</h2>
+        <h2>Příklady služeb díl 5.</h2>
 
-        <pre>Supp/Database/connect_info
-Supp/Database/dbh
-Supp/Database/dsn
-Supp/Database/env
-Supp/Database/LongReadLen
-Supp/Database/NLS_DATE_FORMAT
-Supp/Database/NLS_LANG
-Supp/Database/NLS_NUMERIC_CHARACTERS
-Supp/Database/on_connect_do
-Supp/Database/password
-Supp/Database/RootClass
-Supp/Database/storage
-Supp/Database/username
-Tariff/banding_model_exporter
-Tariff/banding_model_importer
-Tariff/eraser
-Tariff/export_banding_model
-Tariff/export_tariff
+        <pre>Tariff/export_tariff
 Tariff/import_banding_model
 Tariff/Importer/banding_model
 Tariff/Importer/BandingModel/dispatcher
@@ -493,12 +574,6 @@ Tariff/Importer/BandingModel/storage
 Tariff/Importer/storage
 Tariff/Importer/tariff
 Tariff/import_tariff
-</pre>
-    </section>
-    <section class="slide">
-        <h2>Příklady služeb díl 8.</h2>
-
-        <pre>Tariff/import_tariff
 Tariff/storage
 Tariff/tariff_exporter
 Tariff/tariff_importer
@@ -539,12 +614,6 @@ Umum/URIBuilder/uri_builder
 WebCare/Database/attr
 WebCare/Database/connect_info
 WebCare/Database/dbh
-</pre>
-    </section>
-    <section class="slide">
-        <h2>Příklady služeb díl 9.</h2>
-
-        <pre>WebCare/Database/dbh
 WebCare/Database/dsn
 WebCare/Database/env
 WebCare/Database/LongReadLen
@@ -573,69 +642,88 @@ WebServices/AkarSOAPManager/soap_middleware
 WebServices/AkarSOAPManager/soap_psgi_app
 WebServices/AkarSOAPManager/soap_transport
 WebServices/AkarSOAPManager/wsdl_middleware
-WebServices/AkarSOAPManager/wsdl_psgi_app
-WebServices/htusers_pwd
-WebServices/name
-WebServices/old_soap_middleware
-WebServices/old_wsdl_middleware
-WebServices/psgi_app
-WebServices/raw_logging_file
-WebServices/runner
-WebServices/Runner/_
-WebServices/Runner/name
-WebServices/Runner/port
-WebServices/Runner/psgi_app
 </pre>
     </section>
-    <section class="slide">
-        <h2>Příklady služeb díl 10.</h2>
 
-        <pre>WebServices/Runner/psgi_app
-WebServices/soap_authenticator
-WebServices/soap_raw_logging
-WebServices/umum
-WebServices/umum_rest_psgi
-WebServices/umum_soap
-WebServices/umum_stored_files
-WebServices/umum_wsdl
-</pre>
-    </section>
 <!-- /DURIAN -->
 
     <section class="slide">
     <h2>Adresář komponent - příklad použití</h2>
 
-    <pre><code>
-    # durian-rate.pl
-    use Durian::IOC;
+    
 
-    # vrátí adresář komponent
-    my $root = Durian::IOC->root;
-    my $rate_processor = $root->resolve(service => 'Rate/Processor');
-    $rate_processor->rate_calls();
-    </code></pre>
+    <pre><code># durian-rate.pl
+use Durian::IOC;
 
-    <pre><code>
-    # durian-rate.pl
-    use Durian::IOC qw(resolve);
+# vrátí adresář komponent
+my $root = Durian::IOC->root;
+my $rate_processor = $root->resolve(service => 'Rate/Processor');
+$rate_processor->rate_calls();</code></pre>
 
-    my $rate_processor = resolve('Rate/Processor');
-    $rate_processor->rate_calls();
-    </code></pre>
+<pre><code># durian-rate.pl
+use Durian::IOC qw(resolve);
+
+my $rate_processor = resolve('Rate/Processor');
+$rate_processor->rate_calls();
+</code></pre>
+
     </section>
 
+    <section class="slide">
+        <h2>Důsledky uplatňování principu</h2>
+
+        <ul>
+            <li>Zjednodušení struktury tříd (SRP)</li>
+            <li>Místo pro ukládání instancí</li>
+            <li>Posouvání aplikační logiky vzhůru</li>
+        </ul>
+    </section>
 
     <section class="slide">
-      <h2>Here</h2>
-      <pre><code>
-package MY::SOAPClient;
+        <h2>Soukromý průzkum?</h2>
+
+        <p>Máte raději</p>
+
+        <pre><code>$logger->debug( "Options are @{[Dumper($options)]}" );</code></pre>
+
+        <p>nebo</p>
+
+        <pre><code>my $the_options = Dumper($options);
+$logger->debug( "Options are $the_options" );</code></pre>
+
+    </section>
+
+    <section class="slide">
+        <h2>Emancipované třídy</h2>
+
+        <p>Data třídy v potomkovi - Catalyst style</p>
+
+<pre><code># lib/MyApp/View/Mason2.pm
+package MyApp::View::Mason2;
+use base 'Catalyst::View::Mason2';
+__PACKAGE__->config(
+
+    # insert Mason parameters here
+    component_root => 'nejaky_adresar',
+    data_dir       => '/tmp/mason',
+    class_header   => qq(
+            use common::sense;
+            use JSON::XS qw(encode_json decode_json);
+    ),
+);
+
+1;</code></pre>
+    </section>
+
+    <section class="slide">
+      <h2>Emancipované třídy</h2>
+      <pre><code>package Durian::SOAPClient::Salwin;
 use Moose;
 
-has config => ( is => 'ro', lazy => 1, builder => '_build_config' );
+use YAML;
 
-has proxy_url => (
-    is      => 'ro',
-    lazy    => 1,
+# SOAP client needs proxy, username, password
+has proxy_url => ( is => 'ro', lazy => 1,
     default => sub {
         my $this = shift;
         my $proxy = $this->config->{proxy}
@@ -643,11 +731,16 @@ has proxy_url => (
         return $proxy
     }
 );
+has username => ( ... );
+has auth    => ( ... );
+
+has config => ( is => 'ro', lazy => 1, builder => '_build_config' );
 
 sub _build_config {
-    my $this = shift;
-    my $file = najdi_konfiguraci_podle_tridy($this);
-    return natahni_konfiguraci($file);
+    my $this        = shift;
+    my $config_file = $ENV{APP_DIR} . '/etc/'
+        . join( '-', split /::/, ref($this) ) . '.yml';
+    return YAML::LoadFile($config_file);
 }
 
 sub BUILD {
@@ -656,55 +749,162 @@ sub BUILD {
     # lazy, ale ne tak moc
     $this->proxy_url;
 }
-      </code></pre>
+
+sub call_soap {
+    my ($this, $message, $data) = @_;
+    my $req = HTTP::Request->new(
+        POST => $this->proxy_url,
+        [ $this->build_soap_headers($message) ],
+        $this->build_soap_env( $message, $data )
+    );
+    $req->headers->authorization_basic($this->username, $this->auth);
+    ...
+}
+...</code></pre>
     </section>
 
     <section class="slide">
-        <h2>Důsledky uplatňování principu</h2>
+        <h2>Emancipované třídy chytřeji - parametrizované role</h2>
+        <pre><code>package MyApp::Role::ClassConfig;
+use MooseX::Role::Parameterized;
 
-        <ul>
-            <li>Zjednodušení struktury tříd (instance vs třídy)</li>
-            <li>Posouvání aplikační logiky vzhůru</li>
-            <li>Odstraňování chytrosti</li>
-        </ul>
+use Types::Standard qw(ArrayRef Str);
+use YAML qw(LoadFile);
+
+parameter config_basename => ( is => 'ro', isa => Str, predicate => 'has_config_basename');
+
+parameter attributes => ( is => 'ro', required => 1, isa => ArrayRef);
+
+role {
+    my $p = shift;
+
+    my $config_path = sub {
+        my $this = shift;
+
+        # pokud neni jmeno parametrem, vytvorim ho ze tridy instance
+        my $config_basename
+            = $p->has_config_basename
+            ? $p->config_basename
+            : join( '-', split /::/, ref($this) ) . '.yml';
+        return "$ENV{'APP_ROOT'}/etc/$config_basename";
+    };
+
+    has config => ( is => 'ro', lazy_build => 1 );
+
+    method _build_config => sub {
+        my $this        = shift;
+        my $config_path = $this->$config_path;
+        -f $config_path or die "Missing config file $config_path";
+        return YAML::LoadFile($config_path);
+    };
+
+    for my $attr (@{$p->attributes}) {
+        has $attr => (
+            is      => 'ro',
+            lazy    => 1,
+            default => sub {
+                my $this = shift;
+                exists $this->config->{$attr}
+                    or die sprintf "Missing parameter '%s' in config file '%s'", $attr, $this->$config_path;
+                return $this->config->{$attr};
+            }
+        );
+	after BUILD => sub { shift()->$attr };	
+    }
+
+    method BUILD => sub { };
+
+};
+
+1;</code></pre>
     </section>
 
     <section class="slide">
-        <h2>Odbočka</h2>
+        <h2>Emancipované třídy chytřeji - užití role</h2>
+<pre><code>package MyApp::Dummy;
+use Moose;
 
-        <p>Je následující kód sexy?</p>
+with 'MyApp::Role::ClassConfig' => {
+	attributes => [
+		'username', 'auth',
+	]
+};
 
-        <pre><code>
-        $logger->debug( "Options are @{[Dumper($options)]}" );
-        </code></pre>
+1;</code></pre>
 
-        <pre><code>
-        my $the_options = Dumper($options);
-        $logger->debug( "Options are $the_options" );
-        </code></pre>
+<pre><code>use lib qw(./lib);
+use common::sense;
 
+$ENV{APP_ROOT} = '.';
+
+use MyApp::Dummy;
+
+my $dummy = MyApp::Dummy->new;
+warn $dummy->username;
+</code></pre>
     </section>
 
     <section class="slide">
         <h2>Posouvání aplikační logiky "vzhůru"</h2>
 
-        <pre>
-        <code>
-        my $request = $schema->resultset('Request')->find($request_id);
-        $request->run_worklow();
-        </code>
-        </pre>
-   
+        <p>Závislosti v objektech vytvářených "mimo" naši kontrolu</p>
+
+        <pre><code># ORM - DBIx::Class
+my $request = $schema->resultset('Request')->find($request_id);
+
+# $request       ... řídí zpracování procesu
+# $request->type ... určuje třídu (objektu) requestu
+....
+$request->salwin_soap_client->call('createAccount', ...);
+</code></pre>
+
+    <blockquote>Řešíš-li složitý problém při návrhu software, je něco špatně. Vrať se zpět a vydej se cestou, 
+        na které se problém nevyskytuje.
+<footer>— <cite>nabytá znalost</cite></footer></blockquote>
 
         <ul>
-            <li>Používání value objektů</li>
             <li>Používání "statických" objektů (mailer, processor, rating_engine)</li>
+            <li>Zbavení ORM objektů aplikační logiky - value objekty</li>
             <li>Mail se sám neodešle, požadavek nezpracuje, hovor neocení</li>
+            <li>Anemický model</li>
         </ul>
 
         <p>OOP antipattern?</p>
 
     </section>
+
+    <section class="slide">
+        <h2>Možnosti</h2>
+
+        <h3>Vývoj</h3>
+        <p>Krátké, funkční snippety</h2>
+
+        <pre><code># /tmp/akjldud.pl
+use Durian::IOC qw(resolve);
+my $sc = resolve('WSLink/Anoa/anoa_soap_client);
+$sc->call(...);</code></pre>
+
+        <h3>Sites - různé stromy </h3>
+
+        <ul>
+            <li>Český site / Slovenský site</li>
+            <li>Produkce / demo / sandbox</li>
+        </ul>
+
+        <h3>Testy - modifikace adresáře</h3>
+
+        <pre><code>
+use Durian::IOC qw(ioc_root);
+my $root = ioc_root();
+$root->set_service( 'WSLink/Anoa/anoa_soap_client' => mocknito());
+
+my $process = $root->fetch('jina_sluzba')->get;
+$process->run();
+</code></pre>
+
+        
+    </section>
+
     <!-- End slides. -->
 
     <!-- Begin extension snippets. Add or remove as needed. -->

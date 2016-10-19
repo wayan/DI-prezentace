@@ -1,0 +1,9 @@
+use common::sense;
+use Bread::Board;
+
+sub {
+    my $name = shift;
+    container $name => as {
+        service nic => 0;
+    };
+};

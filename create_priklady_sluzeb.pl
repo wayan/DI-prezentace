@@ -19,6 +19,7 @@ print <<"END_TXT";
     </section>
 END_TXT
 
+    $rows_per_slide = int($rows_per_slide * 1.3);
     $title = "Příklady služeb díl $i.";
 }
 
