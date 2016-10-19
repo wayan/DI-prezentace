@@ -1,5 +1,19 @@
 Top level scope
 
+- SRP
+
+Dotazy
+
+- priznane zavislosti
+- kam vede anemicky model
+- Nazvoslovi ....
+
+
+Pravidlo obchazeni ...  vratit se a jit jinou cestou
+
+
+- lifecycle
+
 Různé služby v různých prostředích
 
 Adresovatelnost služeb, konkrétní instance

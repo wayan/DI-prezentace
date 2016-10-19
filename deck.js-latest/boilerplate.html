@@ -39,14 +39,79 @@
     </section>
 
     <section class="slide">
+        <h2>Příklad - oceňování hovorů</h2>
+
+        <pre><code>
+        # Durian-Rate.pl
+        ...
+        my $processor = Durian::Rate::Processor->new(;
+        $processor->rate_calls();
+
+        # Durian/Rate/Processor.pm
+        package Durian::Rate::Processor;
+
+        sub rate_calls {
+            my $storage = ...
+            my $call_it = $this->get_calls();
+            while( my $call = $call_it->()){
+                $this-
+            }
+        }
+        
+        </code></pre>
+    </section>
+
+    <section class="slide">
+        <pre><code>
+        # Durian-Rate.pl
+
+        ...
+        my $storage = DBIx::Class::Storage::DBI->connect('dsn:...', ...);
+        my $engine  = Durian::Rate::Engine->new(
+            dbh => $storage->dbh
+        );
+        my $processor = Durian::Rate::Processor->new(
+            engine => $engine,
+            storage => $storage,
+        );
+        $processor->rate_calls();
+        </code></pre>
+    </section>
+
+    <section class="slide">
+
+    <h2>Dependency injection</h2>
+
+    <blockquote>
+    Vkládání závislostí (anglicky Dependency injection (DI)) je v objektově orientovaném programování technika pro vkládání závislostí mezi jednotlivými komponentami programu tak, aby jedna komponenta mohla používat druhou, aniž by na ni měla v době sestavování programu referenci.
+
+<footer>— <cite><a title="Česká Wikipedie" href="https://cs.wikipedia.org/wiki/Vkl%C3%A1d%C3%A1n%C3%AD_z%C3%A1vislost%C3%AD">Vkládání závislostí - Česká Wikipedie</a></cite></footer></blockquote>
+
+
+    </section>
+
+    <section class="slide">
         <h2>Komponenty aplikace</h2>
 
         <ul>
             <li>Objekty (instance)</li>
-            <li>Uzávěry (PSGI)
             <li>Hodnoty (např. z konfigurace)</li>
-            <li>Třídy (např. Catalyst)</li>
+            <li>Uzávěry (PSGI, middleware nejen Plack,
+                jednoduché objekty, např. CLI
+            )</li>
+            <li>Konstruované třídy (např. aplikace Catalyst)</li>
         </ul>
+
+        Místo konstrukce - skripty, PSGI, top level 
+
+        Top level komponenty
+
+        "Ruční" sestavení v místě použití - pracné.
+        
+        Použijeme knihovnu - např. Bread::Board
+
+        Idea:
+
 
         Připojení k db
         Připojení k externím systémům (REST, SOAP, ...)
@@ -56,19 +121,77 @@
     </section>
 
     <section class="slide">
+        
+    <h2>Adresář komponent</h2>
+
+    <ul>
+        <li>Všechny komponenty mají jména (hierarchická)</li>
+        <li>Adresář obsahuje komponenty všech běhových prostředí</li>
+        <li>Rozhraní závislé na frameworku</li>
+        <li>Implementace - generátory (služby)</li>
+        <li>Struktura (jména) a granularita závisí na autorech</li>
+        <li>Adresář zpřístupníme jako objekt
+            <pre><code>use Durian::IOC;
+my $adresar = Durian::IOC->root;
+my $processor = $adresar->resolve(service => 'Rate/processor');</code></pre>
+        </li>
+        <li>Nebo jako funkci, vracející komponentu pro zadané jméno
+            <pre><code>use Durian::IOC qw(resolve);
+my $processor = resolve('Rate/processor');</code></pre>
+</li>
+</li>
+    </ul>
+    <!-- Dáme všem komponentám v aplikaci jména a centrálně mezi nimi definujeme závislosti.
+    Adresář komponent zpřístupníme jako funkci (metodu) apod.
+    adresář komponent nezávislý na tom, kde komponenta poběží
+    hierarchická jmé
+
+     každý skript si pro svou práci vytáhne jednu nebo více top level komponent
+    a provede s nimi nějakou činnost -->
+
+    </section>
+
+    <section class="slide">
+    <h2>Adresář komponent - příklad použití</h2>
+
+    <pre><code>
+    # durian-rate.pl
+    use Durian::IOC;
+
+    # vrátí adresář komponent
+    my $root = Durian::IOC->root;
+    my $rate_processor = $root->resolve(service => 'Rate/Processor');
+    $rate_processor->rate_calls();
+    </code></pre>
+
+    <pre><code>
+    # durian-rate.pl
+    use Durian::IOC qw(resolve);
+
+    my $rate_processor = resolve('Rate/Processor');
+    $rate_processor->rate_calls();
+    </code></pre>
+    </section>
+
+    
+
+
+    <section class="slide">
       <h2>Here</h2>
       <pre><code>
-package MojeChytraTrida;
+package MY::SOAPClient;
 use Moose;
 
 has config => ( is => 'ro', lazy => 1, builder => '_build_config' );
 
-has nejaka_hodnota => (
+has proxy_url => (
     is      => 'ro',
     lazy    => 1,
     default => sub {
         my $this = shift;
-        return $this->config->{nejaka_hodnota};
+        my $proxy = $this->config->{proxy}
+            or die "The configuration is missing the proxy"; 
+        return $proxy
     }
 );
 
@@ -82,7 +205,7 @@ sub BUILD {
     my $this = $shift;
 
     # lazy, ale ne tak moc
-    $this->nejaka_hodnota;
+    $this->proxy_url;
 }
       </code></pre>
     </section>
@@ -95,6 +218,22 @@ sub BUILD {
             <li>Posouvání aplikační logiky vzhůru</li>
             <li>Odstraňování chytrosti</li>
         </ul>
+    </section>
+
+    <section class="slide">
+        <h2>Odbočka</h2>
+
+        <p>Je následující kód sexy?</p>
+
+        <pre><code>
+        $logger->debug( "Options are @{[Dumper($options)]}" );
+        </code></pre>
+
+        <pre><code>
+        my $the_options = Dumper($options);
+        $logger->debug( "Options are $the_options" );
+        </code></pre>
+
     </section>
 
     <section class="slide">
