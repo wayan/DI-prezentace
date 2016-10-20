@@ -170,8 +170,7 @@ $processor->rate_calls();
     <ul>
         <li>Všechny komponenty mají jména (hierarchická)</li>
         <li>Adresář obsahuje komponenty všech běhových prostředí</li>
-        <li>Rozhraní závislé na frameworku</li>
-        <li>Implementace - generátory (služby)</li>
+        <li>Rozhraní závislé na knihovně</li>
         <li>Struktura (jména) a granularita závisí na autorech</li>
         <li>Adresář zpřístupníme jako objekt
             <pre><code>use Durian::IOC qw(ioc_root);
@@ -197,6 +196,24 @@ my $processor = resolve('Rate/processor');</code></pre>
      každý skript si pro svou práci vytáhne jednu nebo více top level komponent
     a provede s nimi nějakou činnost -->
 
+    </section>
+
+    <section class="slide">
+        <h2>Použití adresáře komponent (IOC rootu)</h2>
+
+        <ul>
+            <li>Na top level úrovni (skripty, ...)</li>
+            <li>IOC root se do komponent nepředává</li>
+            <li>Komponenty rozhraní IOC rootu nepoužívají, závislosti jsou jim předávány.</li>
+
+            <li>Na top level úrovni (skripty, ...)</li>
+            <li>IOC root se do komponent nepředává</li>
+            <li>Komponenty rozhraní IOC rootu nepoužívají, závislosti jsou jim předávány.</li>
+
+            <li>Na top level úrovni (skripty, ...)</li>
+            <li>IOC root se do komponent nepředává</li>
+            <li>Komponenty rozhraní IOC rootu nepoužívají, závislosti jsou jim předávány.</li>
+        </ul>
     </section>
 
     <section class="slide">
@@ -272,17 +289,18 @@ use Bread::Board qw(svc);
 
 my $c = container Root => as {
     container Database => as {
-        service dsn          => 'dbi:Oracle:supp';
-        service username     => '...';
-        service auth         => '...';
-        svc 'connect_info', \[ 'dsn', 'username', 'auth', 'attr' ], sub { [ @_ ] };
+        service dsn      => 'dbi:Oracle:supp';
+        service username => '...';
+        service auth     => '...';
+        svc 'connect_info', \[ 'dsn', 'username', 'auth', 'attr' ],
+            sub { [@_] };
 
-        svc_singleton 'storage', 'DBIx::Class::Storage::DBI', \['connect_info'],
-            sub {
-                my ($class, $connect_info) = @_;
-                my $storage = $class->new;
-                $storage->connect_info( $connect_info );
-                return $storage;
+        svc_singleton 'storage', 'DBIx::Class::Storage::DBI',
+            \['connect_info'], sub {
+            my ( $class, $connect_info ) = @_;
+            my $storage = $class->new;
+            $storage->connect_info($connect_info);
+            return $storage;
             };
 
         svc 'dbh', \['storage'], sub { shift()->dbh };
@@ -290,7 +308,8 @@ my $c = container Root => as {
 
     container Rate => as {
         svc 'engine', 'Durian::Rate::Engine', ['../Database/dbh'];
-        svc 'processor', 'Durian::Rate::Engine', { 'engine' => './engine', storage => '../Database/storage' };
+        svc 'processor', 'Durian::Rate::Engine',
+            { 'engine' => './engine', storage => '../Database/storage' };
     };
 };
 </code></pre>
@@ -793,14 +812,14 @@ $process->run();
         <h2>Důsledky uplatňování principu</h2>
 
         <ul>
-            <li>Zjednodušení struktury tříd (SRP)</li>
             <li>Místo pro ukládání instancí</li>
+            <li>Zjednodušení struktury tříd (SRP)</li>
             <li>Posouvání aplikační logiky vzhůru</li>
         </ul>
     </section>
 
     <section class="slide">
-        <h2>Chuťové preference:</h2>
+        <h2>Chuťové preference</h2>
 
         <p>Máte raději</p>
 
@@ -978,7 +997,46 @@ warn $dummy->username;
     </section>
 
     <section class="slide">
-        <h2>Posouvání aplikační logiky "vzhůru"</h2>
+        <h2>Objekty s jedinou metodou rozhraní - uzávěry</h2>
+
+        <p>Flexibilita</p>
+
+<pre><code>container Rate => as {
+    ...
+    svc 'license_engine', 'Durian::Rate::Engine::NCloudLicense',
+        [
+        'service_id_lookup', 'lic_tariff_version_lookup',
+        'lic_tariff_license_lookup'
+        ];
+
+    # processing hourly licenses
+    container LicenseHourly => as {
+        svc 'engine', \['../license_engine'], sub {
+            my $engine = shift;
+            return sub {
+                $engine->rate_license_hourly(@_);
+            };
+        };
+        ...
+    };
+
+    # processing monthly licenses
+    container LicenseMonthly => as {
+        svc 'engine', \['../license_engine'], sub {
+            my $engine = shift;
+            return sub {
+                $engine->rate_license_monthly(@_);
+            };
+        };
+        ...
+    }
+}
+</code></pre>
+        
+    </section>
+
+    <section class="slide">
+        <h2>Posouvání aplikační logiky vzhůru</h2>
 
         <p>Závislosti v objektech vytvářených "mimo" naši kontrolu</p>
 
