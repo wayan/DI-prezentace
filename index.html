@@ -8,26 +8,26 @@
   <title>Kam vede Dependency injection?</title>
 
   <!-- Required stylesheet -->
-  <link rel="stylesheet" media="screen" href="core/deck.core.css">
+  <link rel="stylesheet" media="screen" href="deck.js/core/deck.core.css">
 
   <!-- Extension CSS files go here. Remove or add as needed. -->
-  <link rel="stylesheet" media="screen" href="extensions/goto/deck.goto.css">
-  <link rel="stylesheet" media="screen" href="extensions/menu/deck.menu.css">
-  <link rel="stylesheet" media="screen" href="extensions/navigation/deck.navigation.css">
-  <link rel="stylesheet" media="screen" href="extensions/status/deck.status.css">
-  <link rel="stylesheet" media="screen" href="extensions/scale/deck.scale.css">
+  <link rel="stylesheet" media="screen" href="deck.js/extensions/goto/deck.goto.css">
+  <link rel="stylesheet" media="screen" href="deck.js/extensions/menu/deck.menu.css">
+  <link rel="stylesheet" media="screen" href="deck.js/extensions/navigation/deck.navigation.css">
+  <link rel="stylesheet" media="screen" href="deck.js/extensions/status/deck.status.css">
+  <link rel="stylesheet" media="screen" href="deck.js/extensions/scale/deck.scale.css">
 
   <!-- Style theme. More available in /themes/style/ or create your own. -->
-  <link rel="stylesheet" media="screen" href="themes/style/web-2.0.css">
+  <link rel="stylesheet" media="screen" href="deck.js/themes/style/web-2.0.css">
 
   <!-- Transition theme. More available in /themes/transition/ or create your own. -->
-  <link rel="stylesheet" media="screen" href="themes/transition/horizontal-slide.css">
+  <link rel="stylesheet" media="screen" href="deck.js/themes/transition/horizontal-slide.css">
 
   <!-- Basic black and white print styles -->
-  <link rel="stylesheet" media="print" href="core/print.css">
+  <link rel="stylesheet" media="print" href="deck.js/core/print.css">
 
   <!-- Required Modernizr file -->
-  <script src="modernizr.custom.js"></script>
+  <script src="deck.js/modernizr.custom.js"></script>
 </head>
 <body>
   <div class="deck-container">
@@ -35,7 +35,11 @@
     <!-- Begin slides. Just make elements with a class of slide. -->
 
     <section class="slide">
-      <h2>Kam vede Dependency Injection</h2>
+      <h2>Kam vede Dependency Injection?</h2>
+        
+      <img src="P7060528-L.jpg" />
+
+      <strong>Roman Daniel</strong>
     </section>
 
     <section class="slide">
@@ -179,7 +183,7 @@ my $processor = $adresar->resolve(service => 'Rate/processor');
 my $processor = $adresar->fetch('Rate/processor')->get;
 </code></pre>
         </li>
-        <li>Nebo jako funkci, vracející komponentu pro zadané jméno
+        <li>Nebo jako funkci, vracející komponentu/y pro zadané jméno
             <pre><code>use Durian::IOC qw(resolve);
 my $processor = resolve('Rate/processor');</code></pre>
 </li>
@@ -670,6 +674,37 @@ $rate_processor->rate_calls();
     </section>
 
     <section class="slide">
+        <h2>Možnosti</h2>
+
+        <h3>Vývoj</h3>
+        <p>Krátké, funkční snippety</h2>
+
+        <pre><code># /tmp/akjldud.pl
+use Durian::IOC qw(resolve);
+my $sc = resolve('WSLink/Anoa/anoa_soap_client);
+$sc->call(...);</code></pre>
+
+        <h3>Sites - různé stromy </h3>
+
+        <ul>
+            <li>Český site / Slovenský site</li>
+            <li>Produkce / demo / sandbox</li>
+        </ul>
+
+        <h3>Testy - modifikace adresáře</h3>
+
+        <pre><code>
+use Durian::IOC qw(ioc_root);
+my $root = ioc_root();
+$root->set_service( 'WSLink/Anoa/anoa_soap_client' => mocknito());
+
+my $process = $root->fetch('jina_sluzba')->get;
+$process->run();
+</code></pre>
+        
+    </section>
+
+    <section class="slide">
         <h2>Důsledky uplatňování principu</h2>
 
         <ul>
@@ -696,7 +731,7 @@ $logger->debug( "Options are $the_options" );</code></pre>
     <section class="slide">
         <h2>Emancipované třídy</h2>
 
-        <p>Data třídy v potomkovi - Catalyst style</p>
+        <h3>Data třídy v potomkovi - Catalyst style</h3>
 
 <pre><code># lib/MyApp/View/Mason2.pm
 package MyApp::View::Mason2;
@@ -710,9 +745,22 @@ __PACKAGE__->config(
             use common::sense;
             use JSON::XS qw(encode_json decode_json);
     ),
-);
-
+); 
 1;</code></pre>
+
+    <h3>DI</h3>
+
+<pre><code>
+my $view_mason = Catalyst::View::Mason2->new(
+    interp => Mason::Interp->new(
+        component_root => 'nejaky_adresar',
+        data_dir       => '/tmp/mason',
+        class_header   => qq(
+            use common::sense;
+            use JSON::XS qw(encode_json decode_json);
+        ),
+    )
+);</code></pre>
     </section>
 
     <section class="slide">
@@ -873,38 +921,6 @@ $request->salwin_soap_client->call('createAccount', ...);
 
     </section>
 
-    <section class="slide">
-        <h2>Možnosti</h2>
-
-        <h3>Vývoj</h3>
-        <p>Krátké, funkční snippety</h2>
-
-        <pre><code># /tmp/akjldud.pl
-use Durian::IOC qw(resolve);
-my $sc = resolve('WSLink/Anoa/anoa_soap_client);
-$sc->call(...);</code></pre>
-
-        <h3>Sites - různé stromy </h3>
-
-        <ul>
-            <li>Český site / Slovenský site</li>
-            <li>Produkce / demo / sandbox</li>
-        </ul>
-
-        <h3>Testy - modifikace adresáře</h3>
-
-        <pre><code>
-use Durian::IOC qw(ioc_root);
-my $root = ioc_root();
-$root->set_service( 'WSLink/Anoa/anoa_soap_client' => mocknito());
-
-my $process = $root->fetch('jina_sluzba')->get;
-$process->run();
-</code></pre>
-
-        
-    </section>
-
     <!-- End slides. -->
 
     <!-- Begin extension snippets. Add or remove as needed. -->
@@ -934,15 +950,15 @@ $process->run();
   </div>
 
 <!-- Required JS files. -->
-<script src="jquery.min.js"></script>
-<script src="core/deck.core.js"></script>
+<script src="deck.js/jquery.min.js"></script>
+<script src="deck.js/core/deck.core.js"></script>
 
 <!-- Extension JS files. Add or remove as needed. -->
-<script src="extensions/menu/deck.menu.js"></script>
-<script src="extensions/goto/deck.goto.js"></script>
-<script src="extensions/status/deck.status.js"></script>
-<script src="extensions/navigation/deck.navigation.js"></script>
-<script src="extensions/scale/deck.scale.js"></script>
+<script src="deck.js/extensions/menu/deck.menu.js"></script>
+<script src="deck.js/extensions/goto/deck.goto.js"></script>
+<script src="deck.js/extensions/status/deck.status.js"></script>
+<script src="deck.js/extensions/navigation/deck.navigation.js"></script>
+<script src="deck.js/extensions/scale/deck.scale.js"></script>
 
 <!-- Initialize the deck. You can put this in an external file if desired. -->
 <script>
