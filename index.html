@@ -53,14 +53,12 @@ $processor->rate_calls();</code></pre>
 <pre><code>package Durian::Rate::Processor;
 ...
 sub rate_calls {
-    my $this = shift;
-     my $cdr_it = $this->get_cdrs();
+    my $this    = shift;
+    my $get_cdr = $this->build_get_cdr();
 
-     my $store_rated = $this->build_store_cdr();
-
-     my $storage = DBIx::Class::Storage::DBI->new;
-     $storage->connect_info(
-        [ $dsn, $username, $auth, $attr, $onconnect ] );
+    my $store_rated = $this->build_store_rated();
+    my $storage     = DBIx::Class::Storage::DBI->new;
+    $storage->connect_info( [ $dsn, $username, $auth, $attr, $onconnect ] );
 
     my $engine = Durian::Rate::Engine->new(
         dbh => $storage->dbh,
@@ -69,7 +67,7 @@ sub rate_calls {
 
     $storage->txn_do(
         sub {
-            while ( my $cdr = $call_it->() ) {
+            while ( my $cdr = $get_cdr->() ) {
                 my $rated = $engine->rate($cdr);
                 $store_rated->( $cdr, $rate );
             }
@@ -94,13 +92,13 @@ has engine => (is => 'ro',  required => 1, isa => HasMethods['rate']);
 ...
 sub rate_calls {
     my $this   = shift;
-    my $cdr_it = $this->get_cdrs();
+    my $get_cdr = $this->build_get_cdr();
 
-    my $store_rated = $this->build_store_cdr();
+    my $store_rated = $this->build_store_rated();
     my $engine = $this->engine;
     $this->storage->txn_do(
         sub {
-            while ( my $cdr = $call_it->() ) {
+            while ( my $cdr = $get_cdr->() ) {
                 my $rated = $engine->rate($cdr);
                 $store_rated->( $cdr, $rate );
             }
@@ -205,11 +203,99 @@ my $processor = resolve('Rate/processor');</code></pre>
         <h2>Bread::Board - DI framework</h2>
 
         <ul>
-            <li>Služby (resolvery) - generátory komponent aplikace (coderef)</li>
+            <li>Služby (resolvery) = generátory komponent aplikace</li>
             <li>Služby mají závislosti na jiných službách</li>
-            <li>Služby mohou mít lifecycle - (singleton)</li>
+            <li>Služby mohou mít lifecycle (singleton)</li>
             <li>Kontejnery - sdružují služby</li>
+            <li>DSL</li>
         </ul>
+    </section>
+
+    <section class="slide">
+        <h2>Bread::Board - oceňování hovorů</h2>
+<pre><code>use Bread::Board;
+my $c = container Root => as {
+    container Database => as {
+        service dsn          => 'dbi:Oracle:supp';
+        service username     => '...';
+        service auth         => '...';
+        service connect_info => (
+            dependencies => [ 'dsn', 'username', 'auth', 'attr' ],
+            block        => sub {
+                my $s = shift;
+                return [
+                    @{ $s->params }{ 'dsn', 'username', 'auth', 'attr' } ];
+            }
+        );
+        service storage => (
+            class        => 'DBIx::Class::Storage::DBI',
+            lifecycle    => 'Singleton',
+            dependencies => ['connect_info'],
+            block        => sub {
+                my $s       = shift;
+                my $storage = $s->class->new;
+                $storage->connect_info( $s->params->{connect_info} );
+                return $storage;
+            }
+        );
+
+        service dbh => (
+            dependencies => ['storage'],
+            block        => sub {
+                my $s = shift;
+                return $s->params->{storage}->dbh;
+            }
+        );
+    };
+
+    container Rate => as {
+        service engine => (
+            class        => 'Durian::Rate::Engine',
+            dependencies => ['../Database/dbh'],
+        );
+        service processor => (
+            class => 'Durian::Rate::Engine',
+            dependencies =>
+                { 'engine' => './engine', storage => '../Database/storage' }
+        );
+    };
+};
+</code></pre>
+
+    </section>
+
+    <section class="slide">
+        <h2>Bread::Board - oceňování hovorů, mírně zkráceno</h2>
+        <p>Pojmenované parametry změněny na poziční</p>
+<pre><code>use Bread::Board;
+use Bread::Board qw(svc);
+
+my $c = container Root => as {
+    container Database => as {
+        service dsn          => 'dbi:Oracle:supp';
+        service username     => '...';
+        service auth         => '...';
+        svc 'connect_info', \[ 'dsn', 'username', 'auth', 'attr' ], sub { [ @_ ] };
+
+        svc_singleton 'storage', 'DBIx::Class::Storage::DBI', \['connect_info'],
+            sub {
+                my ($class, $connect_info) = @_;
+                my $storage = $class->new;
+                $storage->connect_info( $connect_info );
+                return $storage;
+            }
+        );
+
+        svc 'dbh', \['storage'], sub { shift()->dbh };
+    };
+
+    container Rate => as {
+        svc 'engine', 'Durian::Rate::Engine', ['../Database/dbh'];
+        svc 'processor', 'Durian::Rate::Engine', { 'engine' => './engine', storage => '../Database/storage' };
+    };
+};
+</code></pre>
+
     </section>
 
     <section class="slide">
@@ -715,7 +801,7 @@ $process->run();
     </section>
 
     <section class="slide">
-        <h2>Soukromý průzkum?</h2>
+        <h2>Chuťové preference:</h2>
 
         <p>Máte raději</p>
 
