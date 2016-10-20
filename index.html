@@ -283,8 +283,7 @@ my $c = container Root => as {
                 my $storage = $class->new;
                 $storage->connect_info( $connect_info );
                 return $storage;
-            }
-        );
+            };
 
         svc 'dbh', \['storage'], sub { shift()->dbh };
     };
